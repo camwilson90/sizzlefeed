@@ -223,9 +223,8 @@
                     }
                     // Fallback to domain
                     const domain = new URL(url).hostname;
-                    const parts = domain.split('.');
-                    // Return 'arstechnica' from 'arstechnica.com' or 'feeds.arstechnica.com'
-                    return parts[parts.length - 2] || domain;
+                    // Return 'rss.app' or 'beehiiv.com', stripping 'www.'
+                    return domain.replace(/^www\./, '');
                 } catch (e) {
                     return 'source'; // Failsafe
                 }
@@ -352,3 +351,4 @@
 
 </body>
 </html>
+
