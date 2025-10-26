@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live JSON Feed Aggregator</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a modern look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom scrollbar and font styling */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f8fafc; /* Lighter track for minimalist design */
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Simple fade-in animation for loaded feeds */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .feed-card {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        /* Added for line clamping */
+        .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased transition-colors duration-300">
+
+    <div class="container mx-auto p-4 md:p-8 relative">
+        
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-pink-600">
+                The Sizzle Feed
+            </h1>
+        </header>
+
+        <!-- Featured Post Container -->
+        <section id="featured-post-container" class="mb-8">
+            <!-- The single latest post will be injected here -->
+        </section>
+
+        <!-- Feeds Container -->
+        <main id="feeds-container" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+            <!-- Feed cards will be injected here by JavaScript -->
+        </main>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- CONFIGURATION ---
+            const RSS2JSON_API_KEY = 'eznz82aibkontnaiju54mk2zkr30h5fclctfeirq';
+            
+            /**
+             * A reusable parser for the standard rss2json.com API response.
+             */
+            const rssToJsonParser = (data) => ({
+                channelTitle: data.feed.title,
+                items: data.items.map(item => ({
+                    title: item.title,
+                    link: item.link,
+                    description: item.description,
+                    pubDate: item.pubDate,
+                    author: item.author // Pass along the author field
+                }))
+            });
+
+            /**
+             * List of all feeds to load on the page.
+             */
+            const jsonFeeds = [
+                {
+                    type: 'featured',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.beehiiv.com/feeds/v2MfEFT2p3.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                },
+                {
+                    type: 'standard',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/i7XmSIDXpRb6t0uj.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                },
+                {
+                    type: 'standard',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/ldfq56s2O9rkVPU0.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                },
+                {
+                    type: 'standard',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/UUaDT2RGbqOM4TqE.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                },
+                {
+                    type: 'standard',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/F62dxeca5RTejLyu.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                },
+                {
+                    type: 'standard',
+                    url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/kB5Qzc3SZPNR0mK8.xml')}&api_key=${RSS2JSON_API_KEY}`,
+                    parser: rssToJsonParser
+                }
+            ];
+            
+            const featuredContainer = document.getElementById('featured-post-container');
+            const feedsContainer = document.getElementById('feeds-container');
+
+            // --- UTILITY FUNCTIONS ---
+
+            /**
+             * Strips HTML tags from a string.
+             */
+            const stripHtml = (html) => {
+               if (!html) return '';
+               const tempEl = document.createElement('div');
+               tempEl.innerHTML = html;
+               return tempEl.textContent || "";
+            }
+
+            /**
+             * Formats a date string into a relative "time ago" format.
+             */
+            const timeAgo = (dateString) => {
+                const now = new Date();
+                const past = new Date(dateString.replace(/-/g, '/')); // Fix for Safari date parsing
+                const seconds = Math.floor((now - past) / 1000);
+                
+                const intervals = [
+                    { label: 'y', seconds: 31536000 },
+                    { label: 'mo', seconds: 2592000 },
+                    { label: 'd', seconds: 86400 },
+                    { label: 'h', seconds: 3600 },
+                    { label: 'm', seconds: 60 },
+                    { label: 's', seconds: 1 }
+                ];
+
+                for (const interval of intervals) {
+                    const count = Math.floor(seconds / interval.seconds);
+                    if (count >= 1) {
+                        return count + interval.label;
+                    }
+                }
+                return 'now';
+            };
+
+            /**
+             * Extracts the display name (domain or author) from a feed item.
+             */
+            const getDisplayName = (item) => {
+                // Check for Bluesky/social handle
+                if (item.author && (item.author.includes('@') || item.author.includes('.bsky.'))) {
+                    return item.author;
+                }
+                // Fallback to domain
+                try {
+                    const hostname = new URL(item.link).hostname.replace('www.', '');
+                    // Split by '.' and take the first part.
+                    return hostname.split('.')[0]; 
+                } catch (e) {
+                    return 'link'; // Fallback
+                }
+            };
+
+            // --- UI & RENDERING FUNCTIONS ---
+
+            /**
+             * Creates a loader placeholder element.
+             */
+            const createLoader = (type) => {
+                const card = document.createElement('div');
+                if (type === 'featured') {
+                    card.className = 'bg-white p-6 rounded-lg animate-pulse';
+                    card.innerHTML = `<div class="h-4 bg-gray-200 rounded w-1/4 mb-2"></div><div class="h-8 bg-gray-200 rounded w-3/4 mb-3"></div><div class="h-4 bg-gray-200 rounded w-1/2"></div>`;
+                } else {
+                    card.className = 'bg-white p-5 rounded-lg flex flex-col h-full animate-pulse';
+                    card.innerHTML = `<div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div><div class="space-y-3 flex-grow"><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-5/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-4/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div></div>`;
+                }
+                return card;
+            };
+
+            /**
+             * Replaces a loader with a final rendered card.
+             */
+            const renderCard = (loaderElement, className, innerHtml) => {
+                const card = document.createElement('div');
+                card.className = `feed-card ${className}`; // Adds fade-in animation
+                card.innerHTML = innerHtml;
+                loaderElement.replaceWith(card);
+            };
+
+            /**
+             * Renders a static placeholder card.
+             */
+            const renderPlaceholderCard = (title, message) => {
+                const card = document.createElement('div');
+                // Use 'feed-card' to get the fade-in animation
+                card.className = 'feed-card bg-white p-5 rounded-lg flex flex-col h-full opacity-60'; // Make it slightly faded
+                card.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">${title}</h2>
+                    <div class="flex-grow flex items-center justify-center py-10">
+                        <p class="text-gray-400 text-sm">${message}</p>
+                    </div>
+                `;
+                feedsContainer.appendChild(card);
+            };
+            
+            /**
+             * Prepares and renders the HTML for the featured post.
+             */
+            const renderFeaturedPost = (data, loaderElement) => {
+                const latestPost = data.items[0];
+                if (!latestPost) {
+                    throw new Error('No items found in featured feed.');
+                }
+                const description = stripHtml(latestPost.description).substring(0, 200);
+                
+                const className = 'bg-white p-6 rounded-lg';
+                const innerHtml = `
+                    <h3 class="text-sm uppercase font-semibold text-pink-500 mb-1">${data.channelTitle}</h3>
+                    <a href="${latestPost.link}" target="_blank" rel="noopener noreferrer" class="block hover:text-pink-600 transition-colors duration-200">
+                        <h2 class="text-2xl font-bold text-gray-900">
+                            <span>${latestPost.title}</span>
+                        </h2>
+                    </a>
+                    <p class="text-gray-600 text-sm mt-2">${description}...</p>
+                    <p class="text-xs text-gray-400 mt-3">${new Date(latestPost.pubDate.replace(/-/g, '/')).toLocaleString()} (${timeAgo(latestPost.pubDate)})</p>
+                `;
+                
+                renderCard(loaderElement, className, innerHtml);
+            };
+
+            /**
+             * Prepares and renders the HTML for a standard feed.
+             */
+            const renderStandardFeed = (data, loaderElement) => {
+                const itemsHtml = data.items.slice(0, 7).map(item => {
+                    const displayName = getDisplayName(item);
+                    const isBluesky = item.author && (item.author.includes('@') || item.author.includes('.bsky.'));
+                    const titleClampClass = isBluesky ? 'line-clamp-3' : ''; // Add this class if it's a bluesky post
+
+                    return `
+                    <li class="border-b border-gray-100 last:border-b-0 py-2 text-sm">
+                        <div class="flex justify-between items-start space-x-2">
+                            <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="text-pink-600 hover:text-pink-500 hover:underline transition-colors duration-200 min-w-0">
+                                <span class="text-gray-500 text-xs mr-1.5">${displayName}</span>
+                                <span class="${titleClampClass}">${item.title}</span>
+                            </a>
+                            <span class="text-gray-400 text-xs flex-shrink-0 pt-0.5">${timeAgo(item.pubDate)}</span>
+                        </div>
+                    </li>
+                `}).join('');
+
+                const className = 'bg-white p-5 rounded-lg flex flex-col h-full';
+                const innerHtml = `
+                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">${data.channelTitle}</h2>
+                    <ul class="flex-grow">${itemsHtml}</ul>
+                `;
+                
+                renderCard(loaderElement, className, innerHtml);
+            };
+
+            /**
+             * Prepares and renders the HTML for an error card.
+             */
+            const renderError = (error, url, loaderElement) => {
+                const className = 'bg-red-50 p-5 rounded-lg';
+                const innerHtml = `
+                    <h2 class="text-xl font-semibold text-red-700">Load Failed</h2>
+                    <p class="text-red-600 text-sm mt-2">Could not load feed from <span class="break-all text-xs">${url.substring(0, 100)}...</span>.</p>
+                    <p class="text-gray-500 text-xs mt-1">${error.message}</p>
+                `;
+                
+                renderCard(loaderElement, className, innerHtml);
+            };
+
+            // --- CORE LOGIC ---
+            
+            /**
+             * Fetches, parses, and triggers rendering for a single feed config.
+             */
+            const processFeed = async (feedConfig) => {
+                const isFeatured = feedConfig.type === 'featured';
+                const container = isFeatured ? featuredContainer : feedsContainer;
+                const loader = createLoader(isFeatured ? 'featured' : 'standard');
+                container.appendChild(loader);
+
+                try {
+                    const response = await fetch(feedConfig.url);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}. This may be a private feed.`);
+                    
+                    const jsonData = await response.json();
+                    
+                    if (jsonData.status !== 'ok') {
+                        throw new Error(`API returned status: ${jsonData.status}. Message: ${jsonData.message || 'Unknown error'}`);
+                    }
+                    
+                    const parsedData = feedConfig.parser(jsonData);
+
+                    if (isFeatured) {
+                        renderFeaturedPost(parsedData, loader);
+                    } else {
+                        renderStandardFeed(parsedData, loader);
+                    }
+                } catch (error)
+                 {
+                    console.error('Failed to fetch or parse feed:', feedConfig.url, error);
+                    renderError(error, feedConfig.url, loader);
+                }
+            };
+            
+            // --- INITIALIZATION ---
+            
+            // Fetch all configured feeds
+            jsonFeeds.forEach(processFeed);
+            
+            // Render the static placeholder card
+            renderPlaceholderCard('Sizzle forum activity', '(to come)');
+        });
+    </script>
+
+</body>
+</html>
+
+
+
