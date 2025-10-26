@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live JSON Feed Aggregator</title>
+    <title>The Sizzle Feed by Cam Wilson</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts for a modern look -->
@@ -36,25 +36,26 @@
         .feed-card {
             animation: fadeIn 0.5s ease-out forwards;
         }
-        /* Added for line clamping */
+        
+        /* 3-line truncation for Bluesky posts */
         .line-clamp-3 {
             display: -webkit-box;
             -webkit-box-orient: vertical;
             -webkit-line-clamp: 3;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800 antialiased transition-colors duration-300">
 
     <div class="container mx-auto p-4 md:p-8 relative">
-        
+
         <!-- Header -->
         <header class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-bold text-pink-600">
                 The Sizzle Feed
             </h1>
+            <p class="text-gray-500 mt-2">By Cam Wilson</p>
         </header>
 
         <!-- Featured Post Container -->
@@ -74,6 +75,8 @@
             // --- CONFIGURATION ---
             const RSS2JSON_API_KEY = 'eznz82aibkontnaiju54mk2zkr30h5fclctfeirq';
             
+            // --- Feed Configuration ---
+            
             /**
              * A reusable parser for the standard rss2json.com API response.
              */
@@ -84,12 +87,13 @@
                     link: item.link,
                     description: item.description,
                     pubDate: item.pubDate,
-                    author: item.author // Pass along the author field
+                    author: item.author // Pass author for Bluesky check
                 }))
             });
 
             /**
              * List of all feeds to load on the page.
+             * Each object needs a type, a URL, and a parser function.
              */
             const jsonFeeds = [
                 {
@@ -121,178 +125,110 @@
                     type: 'standard',
                     url: `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent('https://rss.app/feeds/kB5Qzc3SZPNR0mK8.xml')}&api_key=${RSS2JSON_API_KEY}`,
                     parser: rssToJsonParser
-                }
+                },
             ];
             
             const featuredContainer = document.getElementById('featured-post-container');
             const feedsContainer = document.getElementById('feeds-container');
 
-            // --- UTILITY FUNCTIONS ---
-
+            // --- UI TEMPLATES ---
+            
             /**
-             * Strips HTML tags from a string.
+             * Creates a minimal loader for the featured post.
              */
-            const stripHtml = (html) => {
-               if (!html) return '';
-               const tempEl = document.createElement('div');
-               tempEl.innerHTML = html;
-               return tempEl.textContent || "";
-            }
-
-            /**
-             * Formats a date string into a relative "time ago" format.
-             */
-            const timeAgo = (dateString) => {
-                const now = new Date();
-                const past = new Date(dateString.replace(/-/g, '/')); // Fix for Safari date parsing
-                const seconds = Math.floor((now - past) / 1000);
-                
-                const intervals = [
-                    { label: 'y', seconds: 31536000 },
-                    { label: 'mo', seconds: 2592000 },
-                    { label: 'd', seconds: 86400 },
-                    { label: 'h', seconds: 3600 },
-                    { label: 'm', seconds: 60 },
-                    { label: 's', seconds: 1 }
-                ];
-
-                for (const interval of intervals) {
-                    const count = Math.floor(seconds / interval.seconds);
-                    if (count >= 1) {
-                        return count + interval.label;
-                    }
-                }
-                return 'now';
-            };
-
-            /**
-             * Extracts the display name (domain or author) from a feed item.
-             */
-            const getDisplayName = (item) => {
-                // Check for Bluesky/social handle
-                if (item.author && (item.author.includes('@') || item.author.includes('.bsky.'))) {
-                    return item.author;
-                }
-                // Fallback to domain
-                try {
-                    const hostname = new URL(item.link).hostname.replace('www.', '');
-                    // Split by '.' and take the first part.
-                    return hostname.split('.')[0]; 
-                } catch (e) {
-                    return 'link'; // Fallback
-                }
-            };
-
-            // --- UI & RENDERING FUNCTIONS ---
-
-            /**
-             * Creates a loader placeholder element.
-             */
-            const createLoader = (type) => {
+            const createFeaturedLoader = () => {
                 const card = document.createElement('div');
-                if (type === 'featured') {
-                    card.className = 'bg-white p-6 rounded-lg animate-pulse';
-                    card.innerHTML = `<div class="h-4 bg-gray-200 rounded w-1/4 mb-2"></div><div class="h-8 bg-gray-200 rounded w-3/4 mb-3"></div><div class="h-4 bg-gray-200 rounded w-1/2"></div>`;
-                } else {
-                    card.className = 'bg-white p-5 rounded-lg flex flex-col h-full animate-pulse';
-                    card.innerHTML = `<div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div><div class="space-y-3 flex-grow"><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-5/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-4/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div></div>`;
-                }
+                card.className = 'bg-white p-6 rounded-lg animate-pulse';
+                card.innerHTML = `<div class="h-4 bg-gray-200 rounded w-1/4 mb-2"></div><div class="h-8 bg-gray-200 rounded w-3/4 mb-3"></div><div class="h-4 bg-gray-200 rounded w-1/2"></div>`;
                 return card;
             };
 
             /**
-             * Replaces a loader with a final rendered card.
+             * Creates a minimal loader for a standard feed card.
              */
-            const renderCard = (loaderElement, className, innerHtml) => {
+            const createLoaderCard = () => {
                 const card = document.createElement('div');
-                card.className = `feed-card ${className}`; // Adds fade-in animation
-                card.innerHTML = innerHtml;
-                loaderElement.replaceWith(card);
-            };
-
-            /**
-             * Renders a static placeholder card.
-             */
-            const renderPlaceholderCard = (title, message) => {
-                const card = document.createElement('div');
-                // Use 'feed-card' to get the fade-in animation
-                card.className = 'feed-card bg-white p-5 rounded-lg flex flex-col h-full opacity-60'; // Make it slightly faded
-                card.innerHTML = `
-                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">${title}</h2>
-                    <div class="flex-grow flex items-center justify-center py-10">
-                        <p class="text-gray-400 text-sm">${message}</p>
-                    </div>
-                `;
-                feedsContainer.appendChild(card);
+                card.className = 'bg-white p-5 rounded-lg flex flex-col h-full animate-pulse';
+                card.innerHTML = `<div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div><div class="space-y-3 flex-grow"><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-5/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div><div class="h-4 bg-gray-200 rounded w-4/6"></div><div class="h-4 bg-gray-200 rounded w-full"></div></div>`;
+                return card;
             };
             
             /**
-             * Prepares and renders the HTML for the featured post.
+             * Creates the static placeholder card.
              */
-            const renderFeaturedPost = (data, loaderElement) => {
-                const latestPost = data.items[0];
-                if (!latestPost) {
-                    throw new Error('No items found in featured feed.');
+            const createPlaceholderCard = () => {
+                 const card = document.createElement('div');
+                card.className = 'feed-card bg-white p-5 rounded-lg flex flex-col h-full';
+                card.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">Sizzle forum activity (to come)</h2>
+                    <div class="flex-grow space-y-2">
+                         <p class="text-sm text-gray-400">This will show the latest forum posts.</p>
+                    </div>
+                `;
+                feedsContainer.appendChild(card);
+            }
+
+            // --- UTILITY FUNCTIONS ---
+
+            /**
+             * Utility to strip HTML tags for descriptions.
+             */
+            const stripHtml = (html) => {
+               if (!html) return '';
+               const doc = new DOMParser().parseFromString(html, 'text/html');
+               return doc.body.textContent || "";
+            }
+
+            /**
+             * Parses a date string as UTC.
+             * rss2json provides dates in UTC (e.g., "2025-10-27 09:30:00")
+             * Appending 'Z' tells the Date constructor to parse it as UTC, not local.
+             */
+            const parseDateAsUTC = (dateString) => {
+                if (!dateString) return new Date(); // Failsafe
+                // Replace spaces with 'T' and add 'Z' to ensure it's parsed as UTC
+                const utcDateString = dateString.replace(' ', 'T') + 'Z';
+                return new Date(utcDateString);
+            };
+            
+            /**
+             * Utility to format relative time.
+             */
+            const timeAgo = (date) => {
+                const now = new Date();
+                const seconds = Math.floor((now - date) / 1000);
+                
+                let interval = seconds / 31536000;
+                if (interval > 1) return Math.floor(interval) + "y";
+                interval = seconds / 2592000;
+                if (interval > 1) return Math.floor(interval) + "mo";
+                interval = seconds / 86400;
+                if (interval > 1) return Math.floor(interval) + "d";
+                interval = seconds / 3600;
+                if (interval > 1) return Math.floor(interval) + "h";
+                interval = seconds / 60;
+                if (interval > 1) return Math.floor(interval) + "m";
+                return Math.floor(seconds) + "s";
+            };
+            
+            /**
+             * Gets a display-friendly name from a URL or author.
+             * Prefers author if it's a Bluesky handle, otherwise simplifies the domain.
+             */
+            const getDisplayName = (url, author) => {
+                try {
+                    // Check for Bluesky/social handles in the author field
+                    if (author && (author.includes('@') || author.includes('.bsky.'))) {
+                        return author.replace('@', ''); // Return username
+                    }
+                    // Fallback to domain
+                    const domain = new URL(url).hostname;
+                    const parts = domain.split('.');
+                    // Return 'arstechnica' from 'arstechnica.com' or 'feeds.arstechnica.com'
+                    return parts[parts.length - 2] || domain;
+                } catch (e) {
+                    return 'source'; // Failsafe
                 }
-                const description = stripHtml(latestPost.description).substring(0, 200);
-                
-                const className = 'bg-white p-6 rounded-lg';
-                const innerHtml = `
-                    <h3 class="text-sm uppercase font-semibold text-pink-500 mb-1">${data.channelTitle}</h3>
-                    <a href="${latestPost.link}" target="_blank" rel="noopener noreferrer" class="block hover:text-pink-600 transition-colors duration-200">
-                        <h2 class="text-2xl font-bold text-gray-900">
-                            <span>${latestPost.title}</span>
-                        </h2>
-                    </a>
-                    <p class="text-gray-600 text-sm mt-2">${description}...</p>
-                    <p class="text-xs text-gray-400 mt-3">${new Date(latestPost.pubDate.replace(/-/g, '/')).toLocaleString()} (${timeAgo(latestPost.pubDate)})</p>
-                `;
-                
-                renderCard(loaderElement, className, innerHtml);
-            };
-
-            /**
-             * Prepares and renders the HTML for a standard feed.
-             */
-            const renderStandardFeed = (data, loaderElement) => {
-                const itemsHtml = data.items.slice(0, 7).map(item => {
-                    const displayName = getDisplayName(item);
-                    const isBluesky = item.author && (item.author.includes('@') || item.author.includes('.bsky.'));
-                    const titleClampClass = isBluesky ? 'line-clamp-3' : ''; // Add this class if it's a bluesky post
-
-                    return `
-                    <li class="border-b border-gray-100 last:border-b-0 py-2 text-sm">
-                        <div class="flex justify-between items-start space-x-2">
-                            <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="text-pink-600 hover:text-pink-500 hover:underline transition-colors duration-200 min-w-0">
-                                <span class="text-gray-500 text-xs mr-1.5">${displayName}</span>
-                                <span class="${titleClampClass}">${item.title}</span>
-                            </a>
-                            <span class="text-gray-400 text-xs flex-shrink-0 pt-0.5">${timeAgo(item.pubDate)}</span>
-                        </div>
-                    </li>
-                `}).join('');
-
-                const className = 'bg-white p-5 rounded-lg flex flex-col h-full';
-                const innerHtml = `
-                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">${data.channelTitle}</h2>
-                    <ul class="flex-grow">${itemsHtml}</ul>
-                `;
-                
-                renderCard(loaderElement, className, innerHtml);
-            };
-
-            /**
-             * Prepares and renders the HTML for an error card.
-             */
-            const renderError = (error, url, loaderElement) => {
-                const className = 'bg-red-50 p-5 rounded-lg';
-                const innerHtml = `
-                    <h2 class="text-xl font-semibold text-red-700">Load Failed</h2>
-                    <p class="text-red-600 text-sm mt-2">Could not load feed from <span class="break-all text-xs">${url.substring(0, 100)}...</span>.</p>
-                    <p class="text-gray-500 text-xs mt-1">${error.message}</p>
-                `;
-                
-                renderCard(loaderElement, className, innerHtml);
             };
 
             // --- CORE LOGIC ---
@@ -303,7 +239,7 @@
             const processFeed = async (feedConfig) => {
                 const isFeatured = feedConfig.type === 'featured';
                 const container = isFeatured ? featuredContainer : feedsContainer;
-                const loader = createLoader(isFeatured ? 'featured' : 'standard');
+                const loader = isFeatured ? createFeaturedLoader() : createLoaderCard();
                 container.appendChild(loader);
 
                 try {
@@ -312,6 +248,7 @@
                     
                     const jsonData = await response.json();
                     
+                    // Critical check: Check for errors *within* the JSON response
                     if (jsonData.status !== 'ok') {
                         throw new Error(`API returned status: ${jsonData.status}. Message: ${jsonData.message || 'Unknown error'}`);
                     }
@@ -323,25 +260,95 @@
                     } else {
                         renderStandardFeed(parsedData, loader);
                     }
-                } catch (error)
-                 {
+                } catch (error) {
                     console.error('Failed to fetch or parse feed:', feedConfig.url, error);
                     renderError(error, feedConfig.url, loader);
                 }
             };
             
+            // --- RENDERING FUNCTIONS ---
+            
+            /**
+             * Renders the featured post.
+             */
+            const renderFeaturedPost = (data, loaderElement) => {
+                const latestPost = data.items[0];
+                if (!latestPost) {
+                    throw new Error('No items found in featured feed.');
+                }
+                const description = stripHtml(latestPost.description).substring(0, 200);
+                const postDate = parseDateAsUTC(latestPost.pubDate);
+
+                const featuredCard = document.createElement('div');
+                featuredCard.className = 'feed-card bg-white p-6 rounded-lg'; // Minimalist
+                featuredCard.innerHTML = `
+                    <h3 class="text-sm uppercase font-semibold text-pink-500 mb-1">Latest from ${data.channelTitle}</h3>
+                    <h2 class="text-2xl font-bold mb-2 text-gray-900">
+                        <a href="${latestPost.link}" target="_blank" rel="noopener noreferrer" class="hover:text-pink-600 transition-colors duration-200">
+                            ${latestPost.title}
+                        </a>
+                    </h2>
+                    <p class="text-gray-600 text-sm">${description}...</p>
+                    <p class="text-xs text-gray-400 mt-3">${postDate.toLocaleString()} (${timeAgo(postDate)})</p>
+                `;
+                loaderElement.replaceWith(featuredCard);
+            };
+
+            /**
+             * Renders a standard feed card.
+             */
+            const renderStandardFeed = (data, loaderElement) => {
+                const feedCard = document.createElement('div');
+                feedCard.className = 'feed-card bg-white p-5 rounded-lg flex flex-col h-full'; // Minimalist
+                
+                const itemsHtml = data.items.slice(0, 7).map(item => {
+                    const displayName = getDisplayName(item.link, item.author);
+                    const isBluesky = displayName.includes('.bsky.');
+                    // Apply 3-line clamp only to Bluesky posts
+                    const titleClass = isBluesky ? 'line-clamp-3' : '';
+                    const postDate = parseDateAsUTC(item.pubDate);
+                    
+                    return `
+                        <li class="border-b border-gray-100 last:border-b-0 py-3 text-sm">
+                            <span class="text-gray-400 font-medium text-xs mr-2">${displayName}</span>
+                            <a href="${item.link}" target="_blank" rel="noopener noreferrer" class="text-pink-600 hover:text-pink-500 hover:underline transition-colors duration-200 ${titleClass}">
+                                ${item.title}
+                            </a>
+                            <span class="text-gray-400 text-xs ml-2 flex-shrink-0">(${timeAgo(postDate)})</span>
+                        </li>
+                    `;
+                }).join('');
+
+                feedCard.innerHTML = `
+                    <h2 class="text-xl font-semibold mb-3 text-gray-900 truncate">${data.channelTitle}</h2>
+                    <ul class="flex-grow">${itemsHtml}</ul>
+                `;
+                loaderElement.replaceWith(feedCard);
+            };
+
+            /**
+             * Renders an error card.
+             */
+            const renderError = (error, url, loaderElement) => {
+                const errorCard = document.createElement('div');
+                errorCard.className = 'feed-card bg-red-50 p-5 rounded-lg'; // Minimalist error
+                errorCard.innerHTML = `
+                    <h2 class="text-xl font-semibold text-red-700">Load Failed</h2>
+                    <p class="text-red-600 text-sm mt-2">Could not load feed from <span class="break-all text-xs">${url.substring(0, 100)}...</span>.</p>
+                    <p class="text-gray-500 text-xs mt-1">${error.message}</p>
+                `;
+                loaderElement.replaceWith(errorCard);
+            };
+
             // --- INITIALIZATION ---
             
             // Fetch all configured feeds
             jsonFeeds.forEach(processFeed);
             
-            // Render the static placeholder card
-            renderPlaceholderCard('Sizzle forum activity', '(to come)');
+            // Add the static placeholder card
+            createPlaceholderCard();
         });
     </script>
 
 </body>
 </html>
-
-
-
